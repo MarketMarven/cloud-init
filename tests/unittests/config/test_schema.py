@@ -254,6 +254,7 @@ class TestGetSchema:
             {"$ref": "#/$defs/cc_phone_home"},
             {"$ref": "#/$defs/cc_power_state_change"},
             {"$ref": "#/$defs/cc_puppet"},
+            {"$ref": "#/$defs/cc_raspberry_pi"},
             {"$ref": "#/$defs/cc_resizefs"},
             {"$ref": "#/$defs/cc_resolv_conf"},
             {"$ref": "#/$defs/cc_rh_subscription"},
@@ -456,6 +457,9 @@ class TestValidateCloudConfigSchema:
         """When strict is False validate_cloudconfig_schema emits warnings."""
         schema = {"properties": {"p1": {"type": "string"}}}
         validate_cloudconfig_schema({"p1": -1}, schema=schema, strict=False)
+        assert (
+            caplog.record_tuples and len(caplog.record_tuples) == 1
+        ), caplog.record_tuples
         [(module, log_level, log_msg)] = caplog.record_tuples
         assert "cloudinit.config.schema" == module
         assert logging.WARNING == log_level
@@ -1503,6 +1507,13 @@ class TestSchemaDocExamples:
     def test_cloud_config_schema_doc_examples(self, example_path):
         validate_cloudconfig_file(example_path, self.schema)
 
+        # Assert no use of deprecated keys
+        validate_cloudconfig_schema(
+            config=yaml.safe_load(open(example_path)),
+            schema=self.schema,
+            strict=True,
+        )
+
     @pytest.mark.parametrize(
         "example_path",
         _get_meta_doc_examples(file_glob="network-config-v1*yaml"),
@@ -1797,6 +1808,27 @@ class TestNetworkSchema:
                 does_not_raise(),
                 "",
                 id="GH-4710_mtu_none_and_str_address",
+            ),
+            pytest.param(
+                {
+                    "network": {
+                        "version": 1,
+                        "config": [
+                            {
+                                "type": "physical",
+                                "name": "eth0",
+                                "subnets": [
+                                    {"type": "dhcp4", "metric": 100},
+                                    {"type": "dhcp6", "metric": 1000},
+                                ],
+                            }
+                        ],
+                    }
+                },
+                SchemaType.NETWORK_CONFIG_V1,
+                does_not_raise(),
+                "",
+                id="subnet_metric_validation",
             ),
         ),
     )
